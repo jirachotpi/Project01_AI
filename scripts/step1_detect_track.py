@@ -2,8 +2,14 @@
 # =====================================================
 # Step 1: Universal Detection and Tracking (With Work-Split Filter)
 # =====================================================
-#python scripts/step1_detect_track.py --dataset data/raw/RWF-2000 --filter Fight
-#python scripts/step1_detect_track.py --dataset data/raw/RWF-2000 --filter NonFight
+# ตัวอย่างการรันแบบปกติ (สร้างวิดีโอด้วย จะช้าหน่อย):
+# python scripts/step1_detect_track.py --dataset data/raw/RWF-2000 --filter Fight
+#
+# ตัวอย่างการรันแบบเร็วสุดๆ (ไม่สร้างวิดีโอ เอาแค่ CSV):
+# python scripts/step1_detect_track.py --dataset data/raw/RWF-2000 --filter Fight --no-video
+# =====================================================
+#ห้ามแก้ ไขโค้ดในส่วนนี้เด็ดขาด เพื่อให้การทำงานของสคริปต์เป็นไปตามที่ออกแบบไว้
+
 
 import os
 import cv2
@@ -25,9 +31,10 @@ SUPPORTED_EXTS = ['.avi', '.mp4', '.mkv']
 # =====================================================
 # 🛠️ Helper Functions
 # =====================================================
-def process_video(video_path, csv_path, out_video_path, model):
+def process_video(video_path, csv_path, out_video_path, model, save_video=True):
     csv_path.parent.mkdir(parents=True, exist_ok=True)
-    out_video_path.parent.mkdir(parents=True, exist_ok=True)
+    if save_video:
+        out_video_path.parent.mkdir(parents=True, exist_ok=True)
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -38,8 +45,10 @@ def process_video(video_path, csv_path, out_video_path, model):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     if fps == 0: fps = 30
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    writer = cv2.VideoWriter(str(out_video_path), fourcc, fps, (width, height))
+    writer = None
+    if save_video:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        writer = cv2.VideoWriter(str(out_video_path), fourcc, fps, (width, height))
 
     try:
         with open(csv_path, mode='w', newline='') as f:
@@ -66,21 +75,29 @@ def process_video(video_path, csv_path, out_video_path, model):
                     for i, track_id in enumerate(track_ids):
                         x1, y1, x2, y2 = map(int, xyxys[i])
                         conf = float(confs[i])
+                        
+                        # เขียนข้อมูลลง CSV เสมอ
                         csv_writer.writerow([frame_id, int(track_id), x1, y1, x2, y2, round(conf, 4)])
-                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                        cv2.putText(frame, f"ID {int(track_id)} ({conf:.2f})", (x1, y1 - 10), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                        
+                        # วาดกรอบเฉพาะตอนที่ผู้ใช้ต้องการเซฟวิดีโอ (ประหยัด CPU)
+                        if save_video:
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                            cv2.putText(frame, f"ID {int(track_id)} ({conf:.2f})", (x1, y1 - 10), 
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-                writer.write(frame)
+                # เซฟเฟรมลงวิดีโอ
+                if save_video:
+                    writer.write(frame)
+                    
                 frame_id += 1
                 
     except Exception as e:
         cap.release()
-        writer.release()
+        if writer: writer.release()
         return False, f"❌ Error: {str(e)}"
 
     cap.release()
-    writer.release()
+    if writer: writer.release()
     return True, "✅ Success"
 
 
@@ -91,18 +108,25 @@ def main():
     parser = argparse.ArgumentParser(description="Universal YOLOv8 Human Tracking")
     parser.add_argument("--dataset", type=str, required=True, help="Path to the root of the dataset")
     parser.add_argument("--output", type=str, default="data/processed/step1_tracking", help="Path to save outputs")
-    # 🌟 เพิ่ม Argument สำหรับการกรองแบ่งงาน
     parser.add_argument("--filter", type=str, default=None, help="Filter to process only paths containing this keyword (e.g., 'Fight')")
+    # 🌟 เพิ่ม Flag สำหรับปิดการวาดวิดีโอ
+    parser.add_argument("--no-video", action="store_true", help="Skip generating debug videos to significantly speed up processing")
     args = parser.parse_args()
 
     dataset_root = Path(args.dataset)
     output_root = Path(args.output)
+    save_video = not args.no_video  # ถ้าใส่ --no-video มา save_video จะเป็น False
 
     print("="*60)
     print("🚀 STEP 1: DETECTION & TRACKING")
     print(f"📁 Dataset: {dataset_root}")
     if args.filter:
         print(f"🎯 Filter Active: Only processing paths containing '{args.filter}'")
+    
+    if not save_video:
+        print("⚡ SPEED MODE: Video generation is DISABLED")
+    else:
+        print("🎥 DEBUG MODE: Video generation is ENABLED")
     print("="*60)
 
     if not dataset_root.exists():
@@ -114,18 +138,15 @@ def main():
     model = YOLO(MODEL_PATH)
     model.to(device)
 
-    # 3. ค้นหาวิดีโอ
     raw_tasks = []
     for ext in SUPPORTED_EXTS:
         raw_tasks.extend(list(dataset_root.rglob(f"*{ext}")))
         raw_tasks.extend(list(dataset_root.rglob(f"*{ext.upper()}")))
 
-    # 🌟 ระบบกรองวิดีโอ (ตามที่ผู้ใช้พิมพ์มาใน --filter)
     video_tasks = []
     if args.filter:
         filter_keyword = args.filter.lower()
         for video_file in raw_tasks:
-            # เช็กว่าคำที่ใช้กรอง อยู่ในเส้นทางไฟล์หรือไม่ (ตัวเล็กใหญ่ไม่สำคัญ)
             if filter_keyword in str(video_file).lower():
                 video_tasks.append(video_file)
     else:
@@ -149,11 +170,17 @@ def main():
         
         pbar.set_postfix_str(f"Current: {video_file.name[:20]}")
 
-        if csv_path.exists() and out_video_path.exists():
-            success_count += 1
-            continue
+        # เช็ก Resume ให้ฉลาดขึ้น: ถ้าปิดวิดีโอ ก็ดูแค่ไฟล์ CSV ว่ามีหรือยัง
+        if save_video:
+            if csv_path.exists() and out_video_path.exists():
+                success_count += 1
+                continue
+        else:
+            if csv_path.exists():
+                success_count += 1
+                continue
             
-        status, msg = process_video(video_file, csv_path, out_video_path, model)
+        status, msg = process_video(video_file, csv_path, out_video_path, model, save_video=save_video)
         
         if status:
             success_count += 1
