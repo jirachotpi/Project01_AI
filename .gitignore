@@ -1,0 +1,24 @@
+# Dataset and Processed Data
+data/
+!data/.keep
+
+# Models and Checkpoints
+models/
+*.pt
+*.keras
+*.h5
+*.hdf5
+
+# Reports and Logs
+reports/
+logs/
+
+# Python Cache
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Environment
+.env
+venv/
+env/
