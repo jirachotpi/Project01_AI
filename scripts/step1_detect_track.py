@@ -2,6 +2,9 @@
 # =====================================================
 # Step 1: Universal Detection and Tracking (With Work-Split Filter)
 # =====================================================
+#python scripts/step1_detect_track.py --dataset data/raw/RWF-2000 --filter Fight
+#python scripts/step1_detect_track.py --dataset data/raw/RWF-2000 --filter NonFight
+
 
 import os
 import cv2
