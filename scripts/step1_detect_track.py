@@ -10,7 +10,6 @@
 # =====================================================
 #ห้ามแก้ ไขโค้ดในส่วนนี้เด็ดขาด เพื่อให้การทำงานของสคริปต์เป็นไปตามที่ออกแบบไว้
 
-
 import os
 import cv2
 import csv
@@ -133,20 +132,26 @@ def main():
     model = YOLO(MODEL_PATH)
     model.to(device)
 
-    raw_tasks = []
+    # 🌟 แก้ปัญหา 1: ใช้ set เพื่อป้องกันไฟล์ซ้ำซ้อนบน Windows
+    raw_tasks = set()
     for ext in SUPPORTED_EXTS:
-        raw_tasks.extend(list(dataset_root.rglob(f"*{ext}")))
-        raw_tasks.extend(list(dataset_root.rglob(f"*{ext.upper()}")))
+        raw_tasks.update(dataset_root.rglob(f"*{ext}"))
+        raw_tasks.update(dataset_root.rglob(f"*{ext.upper()}"))
+    raw_tasks = list(raw_tasks)
 
+    # 🌟 แก้ปัญหา 2: กรองเฉพาะในโฟลเดอร์ย่อยหรือชื่อไฟล์ (ไม่รวมโฟลเดอร์หลัก)
     video_tasks = []
     if args.filter:
+        filter_keyword = args.filter.lower()
         for video_file in raw_tasks:
-            if args.filter.lower() in str(video_file).lower():
+            rel_path = video_file.relative_to(dataset_root)
+            if filter_keyword in str(rel_path).lower():
                 video_tasks.append(video_file)
     else:
         video_tasks = raw_tasks
 
     if not video_tasks:
+        print(f"❌ Error: No video files found matching the criteria.")
         return
 
     print(f"📊 Found {len(video_tasks)} videos to process.\n")
