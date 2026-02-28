@@ -24,7 +24,7 @@ from ultralytics import YOLO
 MODEL_PATH = "yolo11n-pose.pt"
 CONF_THRES = 0.5
 IOU_MATCH_THRES = 0.3  # Threshold for matching Pose Box to Track Box
-SUPPORTED_EXTS = ['.avi', '.mp4', '.mkv']
+SUPPORTED_EXTS = ['.avi', '.mp4', '.mkv', '.mpeg']
 
 # =====================================================
 # 🛠️ Helper Functions

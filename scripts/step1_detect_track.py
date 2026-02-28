@@ -23,7 +23,7 @@ from ultralytics import YOLO
 MODEL_PATH = "yolov8n.pt"
 CONF_THRES = 0.4
 IOU_THRES = 0.5
-SUPPORTED_EXTS = ['.avi', '.mp4', '.mkv']
+SUPPORTED_EXTS = ['.avi', '.mp4', '.mkv', '.mpeg']
 
 def process_video(video_path, csv_path, out_video_path, model, save_video=True):
     csv_path.parent.mkdir(parents=True, exist_ok=True)
